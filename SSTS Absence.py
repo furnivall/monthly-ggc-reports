@@ -1,22 +1,23 @@
 '''
 Imagine you are coming back to this file in a year, or you are handing
 it over to someone else. Including a little docstring like this one
-will help. 
+will help.
 '''
-from selenium import webdriver
-import time
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver import ActionChains
-import os
-import configparser
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.common.by import By
+# from selenium import webdriver
+# import time
+# from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver import ActionChains
+# import os
+# import configparser
+# from selenium.common.exceptions import TimeoutException
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as ec
+# from selenium.webdriver.common.by import By
 import pandas as pd
-from pandas.tseries.offsets import MonthEnd
-from dateutil.relativedelta import *  # Why not specify these as well?
+# from pandas.tseries.offsets import MonthEnd
+# from dateutil.relativedelta import *  # Why not specify these as well?
 
+# What are these arrays?
 finperiods = {'04-19': [1, 1, 4],
               '05-19': [2, 5, 8],
               '06-19': [3, 9, 13],
@@ -30,12 +31,44 @@ finperiods = {'04-19': [1, 1, 4],
               '02-20': [11, 44, 47],
               '03-20': [12, 48, 52]}
 
-path = "W:/Workforce Information/Database/Absence/Absence_Working_Files/"
-path2 = "W:/Workforce Information/Database/Employee_Leavers/Employee_Working_Files"
-date = input("Which month is the target month? (format = MM/YYYY)")
-print(date)
+# You can give these more descriptive names e.g.:
+# path_to_absence_working_files = ...
+#
+# Remember: code is read much more often than it is written:
+# https://www.python.org/dev/peps/pep-0008/#a-foolish-consistency-is-the-hobgoblin-of-little-minds
+# path = "W:/Workforce Information/Database/Absence/Absence_Working_Files/"
+# path2 = "W:/Workforce Information/Database/Employee_Leavers/Employee_Working_Files"
+
+# Consider using argparse instead of input. That way you can supply
+# arguments programatically with e.g. a bash script.
+# date = input("Which month is the target month? (format = MM/YYYY)")
+date = '12/2019'
+
+print(date)  # Consider logging these prints to a file instead.
 date = pd.to_datetime(date)
+
+# This is very complicated.
 finweeks = (list(range(finperiods[(date.strftime('%m-%y'))][1], finperiods[(date.strftime('%m-%y'))][2]+1)))
+
+########################################################################
+
+# What about:
+_, start, end = finperiods[(date.strftime('%m-%y'))]
+finweeks_example_1 = list(range(start, end + 1))
+
+# Even better would be if your arrays were e.g. namedtuples:
+from collections import namedtuple
+
+FinancialPeriod = namedtuple('FinancialPeriod', 'month, week_start, week_end')
+finperiods_example = {'04-19': FinancialPeriod(month=1, week_start=1, week_end=4)}
+
+date_example = '04/2019'
+date_example = pd.to_datetime(date_example)
+financial_period = finperiods[(date.strftime('%m-%y'))]
+finweeks_example_2 = list(range(financial_period.week_start, financial_period.week_end + 1))
+
+########################################################################
+
 finweeks = ([str(date.year)+'W'+f'{i:02}' for i in finweeks])
 finmonth = str(date.year)+'M'+f'{finperiods[(date.strftime("%m-%y"))][0]:02}'
 enddate = date + MonthEnd(1)
@@ -47,8 +80,9 @@ wstats18 = date - relativedelta(months=18) + MonthEnd(1)
 print(enddate)
 
 config = configparser.ConfigParser()
-config.read(r'W:\\Python\Danny\SSTS Extract\SSTSConf.ini')
+config.read(r'W:\\Python\Danny\SSTS Extract\SSTSConf.ini') # nice
 
+# Move the paths to variables at the top of the script
 chromeOptions = webdriver.ChromeOptions()
 prefs = {"download.default_directory": r"W:\Workforce Information\Database\Absence\Absence_Working_Files",
          'safebrowsing.disable_download_protection': True}
@@ -61,7 +95,7 @@ filename = "W:/Workforce Information/Database/Absence/Absence_Working_Files/Mari
 
 def login():
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/logon.jsp')
-    time.sleep(2)
+    time.sleep(2)  # I guess this is some selenium hack
     browser.switch_to.frame('infoView_home')
     username = browser.find_element_by_xpath('//*[@id="usernameTextEdit"]')
     password = browser.find_element_by_id('passwordTextEdit')
@@ -113,7 +147,7 @@ def sickabs():
     time.sleep(1)
     browser.find_element_by_id('saveReportComputerAs_span_text_saveReportXLS').click()
 
-    while not os.path.exists(filename):
+    while not os.path.exists(filename):  # Where is this filename coming from?
         time.sleep(1)
 
     os.rename(filename, path + "sick leave " + sickdate.strftime('%b %y') + " - " +
