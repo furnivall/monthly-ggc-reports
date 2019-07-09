@@ -3,19 +3,19 @@ Imagine you are coming back to this file in a year, or you are handing
 it over to someone else. Including a little docstring like this one
 will help.
 '''
-# from selenium import webdriver
-# import time
-# from selenium.webdriver.common.keys import Keys
-# from selenium.webdriver import ActionChains
-# import os
-# import configparser
-# from selenium.common.exceptions import TimeoutException
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as ec
-# from selenium.webdriver.common.by import By
+from selenium import webdriver
+import time
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver import ActionChains
+import os
+import configparser
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.common.by import By
 import pandas as pd
-# from pandas.tseries.offsets import MonthEnd
-# from dateutil.relativedelta import *  # Why not specify these as well?
+from pandas.tseries.offsets import MonthEnd
+from dateutil.relativedelta import *  # Why not specify these as well?
 
 # What are these arrays?
 finperiods = {'04-19': [1, 1, 4],
