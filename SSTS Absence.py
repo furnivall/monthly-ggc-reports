@@ -1,3 +1,8 @@
+'''
+Imagine you are coming back to this file in a year, or you are handing
+it over to someone else. Including a little docstring like this one
+will help. 
+'''
 from selenium import webdriver
 import time
 from selenium.webdriver.common.keys import Keys
@@ -10,7 +15,8 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.by import By
 import pandas as pd
 from pandas.tseries.offsets import MonthEnd
-from dateutil.relativedelta import *
+from dateutil.relativedelta import *  # Why not specify these as well?
+
 finperiods = {'04-19': [1, 1, 4],
               '05-19': [2, 5, 8],
               '06-19': [3, 9, 13],
