@@ -23,7 +23,7 @@ finperiods = {'04-19': [1, 1, 4],
               '01-20': [10, 40, 43],
               '02-20': [11, 44, 47],
               '03-20': [12, 48, 52]}
-
+bankfile = "W:/Workforce Information/Database/Absence/Absence_Working_Files/Export.xls"
 path = "W:/Workforce Information/Database/Absence/Absence_Working_Files/"
 path2 = "W:/Workforce Information/Database/Employee_Leavers/Employee_Working_Files"
 date = input("Which month is the target month? (format = MM/YYYY)")
@@ -65,27 +65,89 @@ def login():
     password.send_keys(config.get('SSTS', 'pword'))
     browser.find_element_by_xpath('//*[@id="buttonTable"]/input').click()
 
+def banklogin():
+    browser.get('https://nww.ggcbank.allocate-cloud.com/BankStaff/(S(0owungdnx0v5o0hf3y4sfun5))/UserLogin.aspx')
+    try:
+        WebDriverWait(browser, 90).until(
+            ec.presence_of_element_located((By.ID, 'ctl00_content_login_UserName')))
+    except TimeoutException:
+        print("Loading took too much time!")
+    username = browser.find_element_by_id("ctl00_content_login_UserName")
+    username.clear()
+    username.send_keys("DFNB")
+    password = browser.find_element_by_id("ctl00_content_login_Password")
+    password.clear()
+    password.send_keys("S3lenium#")
+    browser.find_element_by_id("ctl00_content_login_LoginButton").click()
+    try:
+        WebDriverWait(browser, 90).until(
+            ec.presence_of_element_located((By.ID, 'ctl00_navigation_RequestsNav_FilledLink')))
+    except TimeoutException:
+        print("Loading took too much time!")
+    browser.find_element_by_id("ctl00_navigation_RequestsNav_FilledLink").click()
+    WebDriverWait(browser,90).until(ec.presence_of_element_located((By.ID, 'ctl00_content_BookingStatus1_cmdFavorite')))
+    browser.find_element_by_id("ctl00_content_BookingStatus1_cmdFavorite").click()
+    WebDriverWait(browser, 90).until(
+    ec.presence_of_element_located((By.XPATH,
+                                    '//*[@id="ctl00_content_BookingStatus1_favPanel"]/ul/li[2]/a')))
+    browser.find_element_by_xpath('//*[@id="ctl00_content_BookingStatus1_favPanel"]/ul/li[2]/a').click()
+    time.sleep(2)
+    browser.find_element_by_id("ctl00_content_BookingStatus1_collapsibleImage").click()
+    time.sleep(1.5)
+    browser.find_element_by_id('ctl00_content_BookingStatus1_UnitActiveInactive_2').click()
+    start_date = browser.find_element_by_id('ctl00_content_BookingStatus1_StartDate')
+    end_date = browser.find_element_by_id('ctl00_content_BookingStatus1_EndDate')
+    start_date.clear()
+    start_date.send_keys(date.strftime('%d-%b-%Y'))
+    end_date.clear()
+    end_date.send_keys(enddate.strftime('%d-%b-%Y'))
+    browser.find_element_by_id('ctl00_content_BookingStatus1_cmdSubmitPrint').click()
+    WebDriverWait(browser, 90).until(ec.element_to_be_clickable((By.ID,'ctl00_content_BookingStatus1_cmdXLS')))
+    browser.find_element_by_id('ctl00_content_BookingStatus1_cmdXLS').click()
+    WebDriverWait(browser, 90).until(ec.element_to_be_clickable((By.ID,'ctl00_content_ExportToXLS')))
+    browser.find_element_by_id('ctl00_content_ExportToXLS').click()
+
+    while not os.path.exists(bankfile):
+        time.sleep(2)
+
+    data = pd.read_html(bankfile,
+                        converters={'Request Id': lambda x: f"{x:10}"})
+
+
+    data = data[0].dropna(axis=0, thresh=4)
+    print(data.columns)
+    data = data[['Request Id', 'Date', 'Start', 'End', 'Ward', 'Cost Centre',
+                 'Staff Group', 'Request Grade', 'Skill', 'Agency', 'Staff',
+                 'Actual Start', 'Actual End', 'Actual Break',
+                 'Actual Hours', 'Agency Account Code', 'Assignment Number', 'Booked Grade', 'Org Structure',
+                 'Request Reason']]
+
+    data.to_csv('W:/Workforce Information/Database/Absence/Absence_Working_Files/WSTATS_BANK_NURSE_EXTRACT.csv', index=False)
+
+
+
+
 
 def sickabs():
     global sickdate
     global enddate
-    time.sleep(3)
+    time.sleep(1)
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.frame('headerPlusFrame')
     browser.switch_to.frame('dataFrame')
     browser.switch_to.frame('workspaceFrame')
     browser.switch_to.frame('workspaceBodyFrame')
     browser.find_element_by_id('ListingURE_treeNode2_name').click()
-    time.sleep(6)
+    time.sleep(2)
 
     actionChains = ActionChains(browser)
     actionChains.double_click(browser.find_element_by_id('ListingURE_listColumn_4_0_1')).perform()
     browser.switch_to.frame('webiViewFrame')
-    time.sleep(3)
+    time.sleep(2)
     start = browser.find_element_by_xpath('//*[@id="PV1"]')
     start.clear()
     start.send_keys(sickdate.strftime('%m/%d/%Y') + " 00:00:00 AM")
-    time.sleep(3)
+    time.sleep(2)
     browser.find_element_by_xpath('//*[@id="_CWpromptstrLstElt1"]').click()
     end = browser.find_element_by_xpath('//*[@id="PV2"]')
     end.clear()
@@ -455,6 +517,7 @@ def allotherabs():
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
 
+banklogin()
 
 boxilogin()
 boxi_bank_extract()
@@ -462,11 +525,10 @@ boxi_overtime_extract()
 boxi_excess_extract()
 boxi_employee_extracts()
 try:
-    WebDriverWait(browser, 10).until(
-        ec.frame_to_be_available_and_switch_to_it('headerPlusFrame'))
-
+   WebDriverWait(browser, 10).until(
+      ec.frame_to_be_available_and_switch_to_it('headerPlusFrame'))
 except TimeoutException:
-    print("Loading took too much time!")
+   print("Loading took too much time!")
 
 browser.find_element_by_id('btnLogoff').click()
 login()
@@ -476,4 +538,4 @@ for i in range(4):
 for i in range(2):
     annualleave()
 
-print('Extracts Complete')
+#print('Extracts Complete')
