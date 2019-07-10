@@ -1,3 +1,9 @@
+'''
+This script uses selenium to log into three of our portals (Allocate, SSTS and Boxi Payroll), then pulls relevant
+extracts for the target month's reporting cycle. These include employee data, absence data (sickness, annual leave,
+all other leave),overtime usage, excess (i.e. hours over contracted pt wte) and bank usage.
+The files are then placed in relevant dirs to be hoovered into an SQL database run by Thomas McMeekin
+'''
 from selenium import webdriver
 import time
 from selenium.webdriver.common.keys import Keys
@@ -10,39 +16,51 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.by import By
 import pandas as pd
 from pandas.tseries.offsets import MonthEnd
-from dateutil.relativedelta import *
-finperiods = {'04-19': [1, 1, 4],
-              '05-19': [2, 5, 8],
-              '06-19': [3, 9, 13],
-              '07-19': [4, 14, 17],
-              '08-19': [5, 18, 21],
-              '09-19': [6, 22, 26],
-              '10-19': [7, 27, 30],
-              '11-19': [8, 31, 34],
-              '12-19': [9, 35, 39],
-              '01-20': [10, 40, 43],
-              '02-20': [11, 44, 47],
-              '03-20': [12, 48, 52]}
+from dateutil.relativedelta import relativedelta
+from collections import namedtuple
+
+
+#the below few lines utilise a quirk of pd.to_datetime - if only month/year is input, it will default to 1st of the
+# month when converted
+date = input("Which month is the target month? (format = MM/YYYY)")
+date = pd.to_datetime(date)
+
+#Financial period initiation - refresh with new ones in April 2020
+fins = namedtuple('fins', 'month startweek endweek')
+finperiods = {'04-19': fins(month=1, startweek=1, endweek=4),
+              '05-19': fins(month=2, startweek=5, endweek=8),
+              '06-19': fins(month=3, startweek=9, endweek=13),
+              '07-19': fins(month=4, startweek=14, endweek=17),
+              '08-19': fins(month=5, startweek=18, endweek=21),
+              '09-19': fins(month=6, startweek=22, endweek=26),
+              '10-19': fins(month=7, startweek=27, endweek=30),
+              '11-19': fins(month=8, startweek=31, endweek=34),
+              '12-19': fins(month=9, startweek=35, endweek=39),
+              '01-20': fins(month=10,startweek=40, endweek=43),
+              '02-20': fins(month=11, startweek=44, endweek=47),
+              '03-20': fins(month=12, startweek=48, endweek=52)}
+targmonth = date.strftime('%m-%y')
+finweeks = (list(range(finperiods[targmonth].startweek, finperiods[targmonth].endweek+1)))
+finweeks = ([str(date.year)+'W'+f'{i:02}' for i in finweeks])
+finmonth = str(date.year)+'M'+f'{finperiods[targmonth].month:02}'
+
+
+#paths
+
 bankfile = "W:/Workforce Information/Database/Absence/Absence_Working_Files/Export.xls"
 path = "W:/Workforce Information/Database/Absence/Absence_Working_Files/"
 path2 = "W:/Workforce Information/Database/Employee_Leavers/Employee_Working_Files"
-date = input("Which month is the target month? (format = MM/YYYY)")
-print(date)
-date = pd.to_datetime(date)
-finweeks = (list(range(finperiods[(date.strftime('%m-%y'))][1], finperiods[(date.strftime('%m-%y'))][2]+1)))
-finweeks = ([str(date.year)+'W'+f'{i:02}' for i in finweeks])
-finmonth = str(date.year)+'M'+f'{finperiods[(date.strftime("%m-%y"))][0]:02}'
+
 enddate = date + MonthEnd(1)
 sickdate = date - relativedelta(months=2)
 leavedate = date - relativedelta(months=1)
 leaveenddate = date+MonthEnd(1)
 wstats18 = date - relativedelta(months=18) + MonthEnd(1)
 
-print(enddate)
-
 config = configparser.ConfigParser()
-config.read(r'W:\\Python\Danny\SSTS Extract\SSTSConf.ini')
+config.read(r'W:\\Python\Danny\SSTS Extract\SSTSConf.ini')# config file containing password + usernames
 
+# Chromedriver initiation
 chromeOptions = webdriver.ChromeOptions()
 prefs = {"download.default_directory": r"W:\Workforce Information\Database\Absence\Absence_Working_Files",
          'safebrowsing.disable_download_protection': True}
@@ -53,7 +71,7 @@ actionChains = ActionChains(browser)
 filename = "W:/Workforce Information/Database/Absence/Absence_Working_Files/Marion-Absence.xls"
 
 
-def login():
+def sstslogin():
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/logon.jsp')
     time.sleep(2)
     browser.switch_to.frame('infoView_home')
@@ -65,7 +83,21 @@ def login():
     password.send_keys(config.get('SSTS', 'pword'))
     browser.find_element_by_xpath('//*[@id="buttonTable"]/input').click()
 
-def banklogin():
+
+def boxilogin():
+    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/logon.jsp')
+    time.sleep(2)
+    browser.switch_to.frame('infoView_home')
+    username = browser.find_element_by_xpath('//*[@id="usernameTextEdit"]')
+    password = browser.find_element_by_id('passwordTextEdit')
+    username.clear()
+    username.send_keys(config.get('BOXI', 'uname'))
+    password.clear()
+    password.send_keys(config.get('BOXI', 'pword'))
+    browser.find_element_by_xpath('//*[@id="buttonTable"]/input').click()
+
+
+def allocate_extract():
     browser.get('https://nww.ggcbank.allocate-cloud.com/BankStaff/(S(0owungdnx0v5o0hf3y4sfun5))/UserLogin.aspx')
     try:
         WebDriverWait(browser, 90).until(
@@ -74,10 +106,10 @@ def banklogin():
         print("Loading took too much time!")
     username = browser.find_element_by_id("ctl00_content_login_UserName")
     username.clear()
-    username.send_keys("DFNB")
+    username.send_keys(config.get('ALLOCATE', 'uname'))
     password = browser.find_element_by_id("ctl00_content_login_Password")
     password.clear()
-    password.send_keys("S3lenium#")
+    password.send_keys(config.get('ALLOCATE', 'pword'))
     browser.find_element_by_id("ctl00_content_login_LoginButton").click()
     try:
         WebDriverWait(browser, 90).until(
@@ -93,7 +125,7 @@ def banklogin():
     browser.find_element_by_xpath('//*[@id="ctl00_content_BookingStatus1_favPanel"]/ul/li[2]/a').click()
     time.sleep(2)
     browser.find_element_by_id("ctl00_content_BookingStatus1_collapsibleImage").click()
-    time.sleep(1.5)
+    time.sleep(2)
     browser.find_element_by_id('ctl00_content_BookingStatus1_UnitActiveInactive_2').click()
     start_date = browser.find_element_by_id('ctl00_content_BookingStatus1_StartDate')
     end_date = browser.find_element_by_id('ctl00_content_BookingStatus1_EndDate')
@@ -115,28 +147,22 @@ def banklogin():
 
 
     data = data[0].dropna(axis=0, thresh=4)
-    print(data.columns)
+
     data = data[['Request Id', 'Date', 'Start', 'End', 'Ward', 'Cost Centre',
                  'Staff Group', 'Request Grade', 'Skill', 'Agency', 'Staff',
                  'Actual Start', 'Actual End', 'Actual Break',
                  'Actual Hours', 'Agency Account Code', 'Assignment Number', 'Booked Grade', 'Org Structure',
                  'Request Reason']]
 
-    data.to_csv('W:/Workforce Information/Database/Absence/Absence_Working_Files/WSTATS_BANK_NURSE_EXTRACT.csv', index=False)
-
-
-
-
+    data.to_csv('W:/Workforce Information/Database/Absence/Absence_Working_Files/WSTATS_BANK_NURSE_EXTRACT.csv',
+                index=False)
+    print("Allocate Bank Extract - Complete")
 
 def sickabs():
     global sickdate
     global enddate
     time.sleep(1)
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     browser.find_element_by_id('ListingURE_treeNode2_name').click()
     time.sleep(2)
 
@@ -174,7 +200,7 @@ def sickabs():
 
     os.rename(filename, path + "sick leave " + sickdate.strftime('%b %y') + " - " +
               enddate.strftime('%b %y') + '.xls')
-    print('loop complete' + str(sickdate) + ' - ' + str(enddate))
+    print('Sickness absence loop complete ' + str(sickdate) + ' - ' + str(enddate))
     sickdate = sickdate - relativedelta(months=3)
     enddate = sickdate + relativedelta(months=2) + MonthEnd(1)
 
@@ -182,25 +208,8 @@ def sickabs():
     browser.switch_to.alert.accept()
 
 
-def boxilogin():
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/logon.jsp')
-    time.sleep(2)
-    browser.switch_to.frame('infoView_home')
-    username = browser.find_element_by_xpath('//*[@id="usernameTextEdit"]')
-    password = browser.find_element_by_id('passwordTextEdit')
-    username.clear()
-    username.send_keys(config.get('BOXI', 'uname'))
-    password.clear()
-    password.send_keys(config.get('BOXI', 'pword'))
-    browser.find_element_by_xpath('//*[@id="buttonTable"]/input').click()
-
-
 def boxi_employee_extracts():
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     actionChains = ActionChains(browser)
     actionChains.double_click(browser.find_element_by_id('ListingURE_listColumn_2_0_1')).perform()
 
@@ -232,18 +241,14 @@ def boxi_employee_extracts():
     print(path+'WSTATS_EMPLOYEE_EXTRACT'+'.xls')
     while not os.path.exists(path+'WSTATS_EMPLOYEE_EXTRACT.xls'):
         time.sleep(1)
-    print("Extract Complete")
+    print("Boxi - Employee Extract Complete")
 
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
 
 
 def boxi_excess_extract():
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     actionchains = ActionChains(browser)
     actionchains.double_click(browser.find_element_by_id('ListingURE_listColumn_3_0_1')).perform()
 
@@ -288,17 +293,13 @@ def boxi_excess_extract():
     print(path + 'WSTATS_EXCESS_EXTRACT' + '.xls')
     while not os.path.exists(path + 'WSTATS_EXCESS_EXTRACT.xls'):
         time.sleep(1)
-    print("Extract Complete")
+    print("Boxi Excess extract - Complete")
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
 
 
 def boxi_bank_extract():
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     actionChains = ActionChains(browser)
     actionChains.double_click(browser.find_element_by_id('ListingURE_listColumn_1_0_1')).perform()
 
@@ -344,17 +345,20 @@ def boxi_bank_extract():
     print(path + 'WSTATS_BANK_EXTRACT' + '.xls')
     while not os.path.exists(path + 'WSTATS_BANK_EXTRACT.xls'):
         time.sleep(1)
-    print("Extract Complete")
+    print("Boxi Bank Extract - Complete")
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
 
 
-def boxi_overtime_extract():
+def boxi_iframe_switch():
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.frame('headerPlusFrame')
     browser.switch_to.frame('dataFrame')
     browser.switch_to.frame('workspaceFrame')
     browser.switch_to.frame('workspaceBodyFrame')
+
+def boxi_overtime_extract():
+    boxi_iframe_switch()
     actionChains = ActionChains(browser)
     actionChains.double_click(browser.find_element_by_id('ListingURE_listColumn_4_0_1')).perform()
 
@@ -402,18 +406,14 @@ def boxi_overtime_extract():
         time.sleep(1)
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
-    print("Extract Complete")
+    print("Boxi Overtime Extract - Complete")
 
 
 def annualleave():
     global leavedate
     global leaveenddate
     time.sleep(1)
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     browser.find_element_by_id('ListingURE_treeNode2_name').click()
     time.sleep(2)
     actionChains = ActionChains(browser)
@@ -449,24 +449,19 @@ def annualleave():
 
     os.rename(filename, path + "annual leave " + leavedate.strftime('%b %y') + " - " + leaveenddate.strftime('%b %y')
               + '.xls')
-    print('loop complete' + str(leavedate) + ' - ' + str(leaveenddate))
+    print('Annual Leave - loop complete: ' + str(leavedate) + ' - ' + str(leaveenddate))
     leavedate = leavedate - relativedelta(months=2)
     leaveenddate = leavedate + relativedelta(months=1) + MonthEnd(1)
     print(enddate)
     print(sickdate)
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
-    print('loop complete')
 
 
 def allotherabs():
     global enddate
     time.sleep(3)
-    browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
-    browser.switch_to.frame('headerPlusFrame')
-    browser.switch_to.frame('dataFrame')
-    browser.switch_to.frame('workspaceFrame')
-    browser.switch_to.frame('workspaceBodyFrame')
+    boxi_iframe_switch()
     browser.find_element_by_id('ListingURE_treeNode2_name').click()
     time.sleep(2)
 
@@ -513,11 +508,11 @@ def allotherabs():
         time.sleep(1)
 
     os.rename(filename, path + "all other leave " + date.strftime('%b %y') + '.xls')
-
+    print('All other leave - Extract Complete')
     browser.get('https://bo-wf.scot.nhs.uk/InfoViewApp/listing/main.do')
     browser.switch_to.alert.accept()
 
-banklogin()
+allocate_extract()
 
 boxilogin()
 boxi_bank_extract()
@@ -531,7 +526,7 @@ except TimeoutException:
    print("Loading took too much time!")
 
 browser.find_element_by_id('btnLogoff').click()
-login()
+sstslogin()
 allotherabs()
 for i in range(4):
     sickabs()
