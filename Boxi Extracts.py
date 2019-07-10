@@ -1,6 +1,0 @@
-
-
-WSTATS EMPLOYEE EXTRACT = 'ListingURE_listColumn_0_0_2'
-ListingURE_listColumn_1_0_2
-ListingURE_listColumn_2_0_2
-ListingURE_listColumn_3_0_2
